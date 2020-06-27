@@ -1,10 +1,12 @@
 const { Telegraf } = require('telegraf')
 
+const key = require("./key.json");
+
 //Dont share this key
-const bot = new Telegraf("1107379681:AAHDmUthN6KuR7TCBwiIPK8io8HhLR7gsc4")
+const bot = new Telegraf(key.key);
 
 //try /start in the bot's dms
-bot.start((ctx) => ctx.reply('Welcome!'))
+bot.start((ctx) => ctx.reply('Welcome!'));
 
 //When it detects any text
 bot.on('text', (ctx) => {
