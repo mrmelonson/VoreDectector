@@ -10,15 +10,15 @@ const bot = new Telegraf(key.key);
 //try /start in the bot's dms
 bot.start((ctx) => ctx.reply('Welcome!'));
 
-bot.command('scoreboard', (ctx) => {
+bot.command(['scoreboard','voreboard'], (ctx) => {
     MongoClient(url).connect(async (err, db) => {
         if (err) throw err;
         var dbo = db.db(key.DB);
-        var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({vorecount:-1, _id:1}).limit(3);
+        var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({vorecount:-1, _id:1}).limit(5);
         var topcount = await top.count();
 
 
-        var boardstring = "Top vore posters! \n";
+        var boardstring = `Top ${topcount} vore posters! \n`;
         var rank = 1;
         await top.forEach((o) => {
             boardstring += `${rank}. ${o.name} has said 'vore' ${o.vorecount} times \n`
