@@ -18,7 +18,7 @@ bot.command(['scoreboard','voreboard'], (ctx) => {
         var topcount = await top.count();
 
 
-        var boardstring = `Top ${topcount} vore posters! \n`;
+        var boardstring = `Top 5 vore posters! \n`;
         var rank = 1;
         await top.forEach((o) => {
             boardstring += `${rank}. ${o.name} has said 'vore' ${o.vorecount} times \n`
