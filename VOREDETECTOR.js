@@ -19,11 +19,9 @@ bot.command(['scoreboard', 'voreboard'], (ctx) => {
         var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({
             vorecount: -1,
             _id: 1
-        }).limit(5);
-        var topcount = await top.count();
+        }).limit(20);
 
-
-        var boardstring = `Top 5 vore posters! \n`;
+        var boardstring = `Top vore posters! \n`;
         var rank = 1;
         await top.forEach((o) => {
             boardstring += `${rank}. ${o.name} has said 'vore' ${o.vorecount} times \n`
@@ -35,6 +33,7 @@ bot.command(['scoreboard', 'voreboard'], (ctx) => {
         db.close();
     });
 });
+
 
 //When it detects any text
 bot.on('text', (ctx) => {
