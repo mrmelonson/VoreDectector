@@ -1,4 +1,6 @@
-const { Telegraf } = require('telegraf');
+const {
+    Telegraf
+} = require('telegraf');
 const MongoClient = require('mongodb').MongoClient;
 
 const key = require("./key.json");
@@ -10,11 +12,14 @@ const bot = new Telegraf(key.key);
 //try /start in the bot's dms
 bot.start((ctx) => ctx.reply('Welcome!'));
 
-bot.command(['scoreboard','voreboard'], (ctx) => {
+bot.command(['scoreboard', 'voreboard'], (ctx) => {
     MongoClient(url).connect(async (err, db) => {
         if (err) throw err;
         var dbo = db.db(key.DB);
-        var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({vorecount:-1, _id:1}).limit(5);
+        var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({
+            vorecount: -1,
+            _id: 1
+        }).limit(5);
         var topcount = await top.count();
 
 
@@ -26,18 +31,18 @@ bot.command(['scoreboard','voreboard'], (ctx) => {
         })
 
         ctx.reply(boardstring);
-        
+
         db.close();
     });
 });
 
 //When it detects any text
 bot.on('text', (ctx) => {
-    if (ctx.message.text.toLowerCase().replace(/ /g,'').trim().includes("vore")) {
+    if (ctx.message.text.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
         //look for vore here
         console.log(`${ctx.message.from.username} has sinned`)
-        
-        if(global.voreTime < 0) {
+
+        if (global.voreTime < 0) {
             global.voreTime = new Date().getTime();
             ctx.reply('👀');
         } else {
@@ -54,43 +59,62 @@ bot.on('text', (ctx) => {
 
             //Formatting nicely
             var time = ""
-            if(days > 0) {
+            var and = false
+            if (days > 0) {
                 time += `${days} days `;
-            } else if (hrs > 0) {
+                and = true
+            }
+            if (hrs > 0) {
                 time += `${hrs} hours `;
-            } else if (mins > 0) {
-                time += `${mins} minutes and `;
-            } 
-            time += `${secs}.${pad(ms,3)} seconds`;
+                and = true
+            }
+            if (mins > 0) {
+                time += `${mins} minutes `;
+                and = true
+            }
+            if (and) {
+                time += "and ";
+            }
+            time += `${secs} seconds`;
 
 
             //Print print print
             ctx.reply(`${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore`);
             global.voreTime = new Date().getTime();
 
-            MongoClient.connect(url, function(err, db) {
+            MongoClient.connect(url, function (err, db) {
                 if (err) throw err;
                 var dbo = db.db(key.DB)
-                var query = {"id" : `${ctx.message.from.id}`};
+                var query = {
+                    "id": `${ctx.message.from.id}`
+                };
                 var updateobj = {};
                 dbo.collection(`${ctx.message.chat.id}`).findOne(query, (err, res) => {
                     if (err) throw err;
                     updateobj = res;
                     if (updateobj == null) {
-                        updateobj = {id: `${ctx.message.from.id}`, name: `${ctx.message.from.first_name}`, vorecount: 0};
+                        updateobj = {
+                            id: `${ctx.message.from.id}`,
+                            name: `${ctx.message.from.first_name}`,
+                            vorecount: 0
+                        };
                     }
 
                     updateobj.vorecount++;
-                    
-                    dbo.collection(`${ctx.message.chat.id}`).updateOne(query, {$set: updateobj}, {upsert: true}, (err) => {
+
+                    dbo.collection(`${ctx.message.chat.id}`).updateOne(query, {
+                        $set: updateobj
+                    }, {
+                        upsert: true
+                    }, (err) => {
                         if (err) throw err;
                     });
                     db.close();
                 });
             });
-            
+
         }
-        
+
     }
 });
 
@@ -106,4 +130,3 @@ function pad(n, z) {
     z = z || 2;
     return ('00' + n).slice(-z);
 }
-
