@@ -36,8 +36,16 @@ bot.command(['scoreboard', 'voreboard'], (ctx) => {
 
 
 //When it detects any text
-bot.on('text', (ctx) => {
-    if (ctx.message.text.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
+bot.on('message', (ctx) => {
+    var voreflag = false;
+    if(ctx.message.text && ctx.message.text.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
+        voreflag = true;
+    } 
+    else if (ctx.message.caption && ctx.message.caption.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
+        voreflag = true;
+    }
+
+    if (voreflag) {
         //look for vore here
         console.log(`${ctx.message.from.username} has sinned`)
 
