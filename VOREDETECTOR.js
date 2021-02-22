@@ -49,13 +49,95 @@ bot.on('message', (ctx) => {
         //look for vore here
         console.log(`${ctx.message.from.username} has sinned`)
 
-        if (global.voreTime < 0) {
-            global.voreTime = new Date().getTime();
-            ctx.reply('👀');
-        } else {
-            //TIME TIME TIME
-            var s = new Date().getTime() - global.voreTime;
-            var ms = s % 1000;
+        //database stuff
+        MongoClient.connect(url, function (err, db) {
+            if (err) throw err;
+            var dbo = db.db(key.DB)
+            var query = {
+                "id": `${ctx.message.from.id}`
+            };
+            var updateobj = {};
+            dbo.collection(`${ctx.message.chat.id}`).findOne(query, (err, res) => {
+                if (err) throw err;
+                updateobj = res;
+                if (updateobj == null) {
+                    updateobj = {
+                        id: `${ctx.message.from.id}`,
+                        name: `${ctx.message.from.first_name}`,
+                        vorecount: 0,
+                        lastvoretime: global.voreTime,
+                        currentmodifier: 1
+                    };
+                }
+
+                if(updateobj.lastvoretime != null || updateobj.currentmodifier != null) {
+                    if((Date.now() - updateobj.lastvoretime)/1000 < 300) {
+                        updateobj.currentmodifier++;
+                    } else {
+                        updateobj.currentmodifier = 1;
+                    }
+                } else {
+                    updateobj.lastvoretime = Date.now();
+                    updateobj.currentmodifier = 1;
+                }
+
+                //Mute user
+                var mutetime = (Date.now() / 1000) + (60 * updateobj.currentmodifier);
+                var extras = { 
+                                "permissions" : {
+                                    "can_send_messages" : false
+                                },
+                                "until_date" : mutetime
+                            };
+                console.log(mutetime);
+                ctx.restrictChatMember(ctx.message.from.id, extras)
+                    .catch((err) => {
+                        console.error(err);
+                    });
+                console.log(`User muted for ${updateobj.currentmodifier} minute (current modifier: ${updateobj.currentmodifier})`);
+                
+                if (global.voreTime < 0) {
+                    //First instance?
+                    global.voreTime = new Date().getTime();
+                    ctx.reply('👀');
+                } else {
+                    //Print print print
+                    var time = formatTime(new Date().getTime() - global.voreTime);
+                    ctx.reply(`${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore. They have been muted for ${updateobj.currentmodifier} minutes.`);
+                }
+
+                updateobj.lastvoretime = Date.now();
+                updateobj.vorecount++;
+
+                dbo.collection(`${ctx.message.chat.id}`).updateOne(query, {
+                    $set: updateobj
+                }, {
+                    upsert: true
+                }, (err) => {
+                    if (err) throw err;
+                });
+                db.close();
+            });
+        });
+
+    }
+});
+
+
+//Start the bot with a little message
+bot.launch().then((o, e) => {
+    console.log("Starting bot...");
+    global.voreTime = -1;
+});
+
+//Pad function for time element in the voretime
+function pad(n, z) {
+    z = z || 2;
+    return ('00' + n).slice(-z);
+}
+
+function formatTime(t) {
+            var s = t
             s = s / 1000;
             var days = Math.floor(s / 86400);
             s %= 86400;
@@ -84,56 +166,5 @@ bot.on('message', (ctx) => {
             }
             time += `${secs} seconds`;
 
-
-            //Print print print
-            ctx.reply(`${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore`);
-            global.voreTime = new Date().getTime();
-
-            MongoClient.connect(url, function (err, db) {
-                if (err) throw err;
-                var dbo = db.db(key.DB)
-                var query = {
-                    "id": `${ctx.message.from.id}`
-                };
-                var updateobj = {};
-                dbo.collection(`${ctx.message.chat.id}`).findOne(query, (err, res) => {
-                    if (err) throw err;
-                    updateobj = res;
-                    if (updateobj == null) {
-                        updateobj = {
-                            id: `${ctx.message.from.id}`,
-                            name: `${ctx.message.from.first_name}`,
-                            vorecount: 0
-                        };
-                    }
-
-                    updateobj.vorecount++;
-
-                    dbo.collection(`${ctx.message.chat.id}`).updateOne(query, {
-                        $set: updateobj
-                    }, {
-                        upsert: true
-                    }, (err) => {
-                        if (err) throw err;
-                    });
-                    db.close();
-                });
-            });
-
-        }
-
-    }
-});
-
-
-//Start the bot with a little message
-bot.launch().then((o, e) => {
-    console.log("Starting bot...");
-    global.voreTime = -1;
-});
-
-//Pad function for time element in the voretime
-function pad(n, z) {
-    z = z || 2;
-    return ('00' + n).slice(-z);
+            return time;
 }
