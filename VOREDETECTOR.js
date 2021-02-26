@@ -100,7 +100,7 @@ bot.on('message', async (ctx) => {
         console.log(mutetime);
         ctx.restrictChatMember(ctx.message.from.id, extras)
             .catch((err) => {
-                console.error(`ERROR CODE: ${err.code}`);
+                console.error(`ERROR CODE: ${err}`);
             });
         console.log(`User muted for ${user.currentmodifier} minute (current modifier: ${user.currentmodifier})`);
 
