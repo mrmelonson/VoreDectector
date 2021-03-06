@@ -87,6 +87,14 @@ bot.on('message', async (ctx) => {
             };
         }
 
+        if (localobj == null) {
+            localobj = {
+                id: `${ctx.message.chat.id}`,
+                lastvoretime: voreTime,
+                recordtime: 0
+            };
+        }
+
         //Mute user, editing perms
         console.log(user.currentmodifier);
         var mutetime = Math.round((voreTime / 1000) + (60 * user.currentmodifier));
@@ -134,14 +142,6 @@ bot.on('message', async (ctx) => {
         } else {
             user.lastvoretime = voreTime;
             user.currentmodifier = 1;
-        }
-
-        if (localobj == null) {
-            localobj = {
-                id: `${ctx.message.chat.id}`,
-                lastvoretime: voreTime,
-                recordtime: 0
-            };
         }
 
         await dbo.collection(`${ctx.message.chat.id}`).updateOne({"id": `${ctx.message.chat.id}`}, {
