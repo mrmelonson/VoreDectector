@@ -88,7 +88,8 @@ bot.on('message', async (ctx) => {
         }
 
         //Mute user, editing perms
-        var mutetime = (voreTime / 1000) + (60 * user.currentmodifier);
+        console.log(user.currentmodifier);
+        var mutetime = Math.round((voreTime / 1000) + (60 * user.currentmodifier));
 
         var extras = { 
                         "permissions" : {
@@ -102,7 +103,25 @@ bot.on('message', async (ctx) => {
             .catch((err) => {
                 console.error(`ERROR CODE: ${err}`);
             });
+
+        //check for new record
+        var newrecordstr = "";
+        var newrecord = voreTime - localobj.lastvoretime;
+
+        console.log(`record time: ${localobj.recordtime}`);
+        console.log(`last vore time: ${localobj.lastvoretime}`);
+
+        if((newrecord) > localobj.recordtime) {
+            newrecordstr = "NEW RECORD!";
+            localobj.recordtime = newrecord;
+        }
+
+        //print print print
         console.log(`User muted for ${user.currentmodifier} minute (current modifier: ${user.currentmodifier})`);
+        var time = formatTime(newrecord);
+        ctx.reply(`${newrecordstr} \n ${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore. They have been muted for ${user.currentmodifier} minutes.`);
+
+        localobj.lastvoretime = voreTime;
 
         //Relevant updating
         //If user had said vore within 5 mins of the last time, add 1 minute to mute
@@ -124,24 +143,6 @@ bot.on('message', async (ctx) => {
                 recordtime: 0
             };
         }
-
-        //check for new record
-        var newrecordstr = "";
-        var newrecord = voreTime - localobj.lastvoretime;
-
-        console.log(`record time: ${localobj.recordtime}`);
-        console.log(`last vore time: ${localobj.lastvoretime}`);
-
-        if((newrecord) > localobj.recordtime) {
-            newrecordstr = "NEW RECORD!";
-            localobj.recordtime = newrecord;
-        }
-
-        //print print print
-        var time = formatTime(newrecord);
-        ctx.reply(`${newrecordstr} \n ${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore. They have been muted for ${user.currentmodifier} minutes.`);
-
-        localobj.lastvoretime = voreTime;
 
         await dbo.collection(`${ctx.message.chat.id}`).updateOne({"id": `${ctx.message.chat.id}`}, {
             $set: localobj
