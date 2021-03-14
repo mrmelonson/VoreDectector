@@ -53,11 +53,24 @@ bot.command('record', (ctx) => {
 bot.on('message', async (ctx) => {
     var voreflag = false;
 
-    if(ctx.message.text && ctx.message.text.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
-        voreflag = true;
+    var messagestr;
+
+    if(ctx.message.text) {
+        messagestr = ctx.message.text;
     } 
-    else if (ctx.message.caption && ctx.message.caption.toLowerCase().replace(/ /g, '').trim().includes("vore")) {
-        voreflag = true;
+    else if (ctx.message.caption_entities) {
+        messagestr = ctx.message.caption;
+    }
+
+    if(messagestr) {
+        var messagearr = messagestr.replace(/[.,\/#!?$%\^&\*;:{}=\-_`~()]/g,"").toLowerCase().split(" ");
+        console.log(messagearr);
+        for (let i = 0; i < messagearr.length; i++) {
+            if(messagearr[i] === "vore") {
+                voreflag = true;
+            }
+            
+        }
     }
 
     if (voreflag) {
