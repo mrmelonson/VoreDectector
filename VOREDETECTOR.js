@@ -1,10 +1,8 @@
 const {
     Telegraf
 } = require('telegraf');
-const MongoClient = require('mongodb').MongoClient;
-
+const mysql = require('mysql');
 const key = require("./key.json");
-const url = key.DB_url;
 
 //Dont share this key
 const bot = new Telegraf(key.key);
@@ -12,40 +10,60 @@ const bot = new Telegraf(key.key);
 //try /start in the bot's dms
 bot.start((ctx) => ctx.reply('Welcome!'));
 
-bot.command(['scoreboard', 'voreboard'], (ctx) => {
-    MongoClient(url).connect(async (err, db) => {
-        if (err) throw err;
-        var dbo = db.db(key.DB);
-        var top = await dbo.collection(`${ctx.message.chat.id}`).find().sort({
-            vorecount: -1,
-            _id: 1
-        }).limit(20);
-
-        var boardstring = `Top vore posters! \n`;
-        var rank = 1;
-        await top.forEach((o) => {
-            boardstring += `${rank}. ${o.name} has said 'vore' ${o.vorecount} times \n`
-            rank++
-        })
-
-        ctx.reply(boardstring);
-
-        db.close();
-    });
+var con = mysql.createConnection({
+    host: "localhost",
+    user: key.username,
+    password: key.password,
+    database: key.mydb
 });
 
-bot.command('record', (ctx) => {
-    MongoClient(url).connect(async (err, db) => {
-        if (err) throw err;
-        var dbo = db.db(key.DB);
-        var res = await dbo.collection(`${ctx.message.chat.id}`).findOne({"id": `${ctx.message.chat.id}`});
 
-        var time = formatTime(res.recordtime)
+bot.command(['scoreboard', 'voreboard'], (ctx) => {
+    var table = `chat_${-ctx.message.chat.id}`;
+    var sqlq = `SELECT * FROM ${table} ORDER BY count DESC LIMIT 5`
+    con.query(sqlq, async (e, r) => {
+        if (e) {
+            console.log("No table")
+            ctx.reply("Nobody has sinned, yet...");
+            return;
+        };
+        var counts = [];
+        var promisearray = [];
+        for (let i = 0; i < r.length; i++) {
+            if(!isNaN(r[i].user_id)) { 
+                promisearray.push((ctx.getChatMember(r[i].user_id)));
+                counts.push(r[i].count)
+            }
+        }
 
-        ctx.reply(`Current record for not saying vore for in this chat is: \n${time}`);
+        var formatString = "Scoreboard:\n"
 
-        db.close();
+        if(promisearray.length > 0) {
+            Promise.all(promisearray).then((values) => {
+                //console.log(values[1].user);
+                for(let i = 0; i < values.length; i++) {
+                    formatString += `${i+1}. ${values[i].user.first_name}: ${counts[i]}\n`;
+                }
+                ctx.reply(formatString);
+            });
+        }
     });
+
+});
+
+
+
+bot.command('record', (ctx) => {
+    var table = `chat_${-ctx.message.chat.id}`
+    con.query(`SELECT count FROM ${table} WHERE user_id='record'`, (e,r) => {
+        if (e) {
+            console.log("No table")
+            ctx.reply("Nobody has sinned, yet...");
+            return;
+        };
+        ctx.reply(`Current record is: ${formatTime(r[0].count)}`);
+        console.log(`User: ${ctx.from.id} requesting record for table: ${table}`);
+    })
 });
 
 
@@ -64,7 +82,7 @@ bot.on('message', async (ctx) => {
 
     if(messagestr) {
         var messagearr = messagestr.replace(/[.,\/#!?$%\^&\*;:{}=\-_`~()]/g,"").toLowerCase().split(" ");
-        console.log(messagearr);
+        //console.log(messagearr);
         for (let i = 0; i < messagearr.length; i++) {
             if(messagearr[i] === "vore") {
                 voreflag = true;
@@ -73,106 +91,124 @@ bot.on('message', async (ctx) => {
         }
     }
 
-    if (voreflag) {
-        //look for vore here
-        console.log(`${ctx.message.from.username} has sinned`)
+    if(voreflag) {
+        var user_id = ctx.message.from.id;
 
-        //Connect to DB
-        const db = await MongoClient.connect(url, {
-            useNewUrlParser: true,useUnifiedTopology: true
-        });
-
-        //set new vore time
-        var voreTime = Date.now();
-
-        var dbo = db.db(key.DB);
-
-        var user = await dbo.collection(`${ctx.message.chat.id}`).findOne({"id": `${ctx.message.from.id}`});
-        var localobj = await dbo.collection(`${ctx.message.chat.id}`).findOne({"id": `${ctx.message.chat.id}`});
-
-        if (user == null) {
-            user = {
-                id: `${ctx.message.from.id}`,
-                name: `${ctx.message.from.first_name}`,
-                vorecount: 0,
-                lastvoretime: voreTime,
-                currentmodifier: 1
-            };
+        if(ctx.message.chat.type === "private") {
+            console.log(`Detected vore in DMs`)
+            return;
         }
 
-        if (localobj == null) {
-            localobj = {
-                id: `${ctx.message.chat.id}`,
-                lastvoretime: voreTime,
-                recordtime: 0
-            };
-        }
+        var table = `chat_${-ctx.message.chat.id}`
 
-        //Mute user, editing perms
-        console.log(user.currentmodifier);
-        var mutetime = Math.round((voreTime / 1000) + (60 * user.currentmodifier));
+        console.log(`Vore detected! From: ${user_id}`);
 
-        var extras = { 
-                        "permissions" : {
-                            "can_send_messages" : false // CHANGE TO FALSE 
-                        },
-                        "until_date" : mutetime
-                    };
+        var getsql = `SELECT * FROM ${table} WHERE user_id = ${user_id.toString()}`;
+        con.query(getsql, (err, result) => {
+            var notable = false;
+            if (err) { 
+                if (err.errno === 1142 || err.errno === 1146) {
+                    console.log(`no table found, creating new table: ${table}`);
+                    con.query(`CREATE TABLE ${table} (user_id VARCHAR(20), count BIGINT)`, function (err, result) {
+                        if (err) throw err;
+                    });
+                    notable = true;
+                }
+            }
+            if(notable || result == "") {
+                console.log(`creating user: ${user_id}`);
+                con.query(`INSERT INTO ${table} (user_id, count) VALUES (${user_id}, 1)`, function (err, r) {
+                    if (err) throw err;
+                });
+            } else {;
+                //console.log(result[0].user_id);
+                con.query(`UPDATE ${table} SET count=${result[0].count + 1} WHERE user_id='${user_id}'`, function (err, result) {
+                    if (err) throw err;
+                });
+                
+            }
+
+
+            console.log(`Updated user: ${user_id}`);
+
+            var getsql = `SELECT * FROM ${table} WHERE user_id='lastvore' OR user_id='record'`;
+            con.query(getsql, function (err, result) {
+                if(err) throw err;
+                var voretime = Date.now();
+                if(result == "") {
+                    console.log(`No timestamps, creating new timestamp`);
+                    con.query(`INSERT INTO ${table} (user_id, count) VALUES ('lastvore', ${voretime})`, function (err, r) {
+                        if (err) throw err;
+                    });
+                    con.query(`INSERT INTO ${table} (user_id, count) VALUES ('record', 0)`, function (err, r) {
+                        if (err) throw err;
+                    });
+                }
+                else {
+                    //check for new record
+                    //console.log(result);
+                    var lastvore = result[0].count;
+                    var record = result[1].count;
                     
-        console.log(mutetime);
-        ctx.restrictChatMember(ctx.message.from.id, extras)
-            .catch((err) => {
-                console.error(`ERROR CODE: ${err}`);
+                    var newrecordstr = "";
+                    var newrecord = voretime - lastvore;
+
+                    //console.log(`record time: ${localobj.recordtime}`);
+                    //console.log(`last vore time: ${localobj.lastvoretime}`);
+                    
+                    var time = formatTime(newrecord);
+                    var newrecordflag = false;
+
+                    if((newrecord) > record) {
+                        newrecordstr = "NEW RECORD!";
+                        record = newrecord;
+                        newrecordflag = true;
+                        console.log("New record.")
+                    }
+
+                    con.query(`UPDATE ${table} SET count=${voretime} WHERE user_id='lastvore'`, function (err, result) {
+                        if (err) throw err;
+                    });
+
+                    if(newrecordflag) {
+                        con.query(`UPDATE ${table} SET count=${record} WHERE user_id='record'`, function (err, result) {
+                            if (err) throw err;
+                        });
+                    }
+
+                    console.log(`Updated table: ${table}`);
+                    ctx.reply(`${newrecordstr} \n${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore. User has been muted for [2 minutes]`);
+                }
             });
 
-        //check for new record
-        var newrecordstr = "";
-        var newrecord = voreTime - localobj.lastvoretime;
+            var payload = { 
+                "permissions" : {
+                    "can_send_messages" : false // CHANGE TO FALSE 
+                }
+            };
 
-        console.log(`record time: ${localobj.recordtime}`);
-        console.log(`last vore time: ${localobj.lastvoretime}`);
+            ctx.restrictChatMember(user_id, payload)
+                .catch((err) => {
+                    console.error(`ERROR CODE: ${err}`);
+                    return;
+                });
+                
+                console.log(`Muting user: ${user_id}`);
+                setTimeout(function(){
+                    var payload = { 
+                        "permissions" : {
+                            "can_send_messages" : true // CHANGE TO FALSE 
+                        }
+                    };
+                    ctx.restrictChatMember(user_id, payload).catch((err) => {
+                        console.error(`ERROR CODE: ${err}`);
+                        return;
+                    })
+                    console.log(`Unmuted user: ${user_id}`)
+                }, 60000);
 
-        if((newrecord) > localobj.recordtime) {
-            newrecordstr = "NEW RECORD!";
-            localobj.recordtime = newrecord;
-        }
 
-        //print print print
-        console.log(`User muted for ${user.currentmodifier} minute (current modifier: ${user.currentmodifier})`);
-        var time = formatTime(newrecord);
-        ctx.reply(`${newrecordstr} \n ${ctx.message.from.first_name} has sinned, it has been ${time} since someone has mentioned vore. They have been muted for ${user.currentmodifier} minutes.`);
-
-        localobj.lastvoretime = voreTime;
-
-        //Relevant updating
-        //If user had said vore within 5 mins of the last time, add 1 minute to mute
-        if(user.lastvoretime != null || user.currentmodifier != null) {
-            if((voreTime - user.lastvoretime)/1000 < 300) {
-                user.currentmodifier++;
-            } else {
-                user.currentmodifier = 1;
-            }
-        } else {
-            user.lastvoretime = voreTime;
-            user.currentmodifier = 1;
-        }
-
-        await dbo.collection(`${ctx.message.chat.id}`).updateOne({"id": `${ctx.message.chat.id}`}, {
-            $set: localobj
-        }, {
-            upsert: true
-        }, (err) => {
-            if (err) throw err;
         });
-
-        await dbo.collection(`${ctx.message.chat.id}`).updateOne({"id": `${ctx.message.from.id}`}, {
-            $set: user
-        }, {
-            upsert: true
-        }, (err) => {
-            if (err) throw err;
-        });
-
     }
 });
 
